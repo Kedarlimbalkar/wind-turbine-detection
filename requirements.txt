@@ -1,0 +1,11 @@
+ultralytics==8.4.155
+transformers
+accelerate
+torchvision
+opencv-python-headless
+fastapi
+uvicorn
+python-multipart
+nest-asyncio
+pyngrok
+azure-storage-blob
