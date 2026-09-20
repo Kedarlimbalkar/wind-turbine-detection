@@ -18,7 +18,20 @@ from ultralytics import YOLO
 MODEL_PATH = os.environ.get("MODEL_PATH", "model/best.pt")
 CONFIDENCE_THRESHOLD = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.35"))
 
-detection_model = YOLO(MODEL_PATH)
+_detection_model: YOLO | None = None
+
+
+def get_model() -> YOLO:
+    """Lazily load and cache the detection model.
+
+    Deferring the load until first use (rather than at import time) keeps the
+    module importable in contexts without model weights available, such as
+    unit tests and CI.
+    """
+    global _detection_model
+    if _detection_model is None:
+        _detection_model = YOLO(MODEL_PATH)
+    return _detection_model
 
 app = FastAPI(title="Wind Turbine Detection API")
 last_bulk_results: list[dict[str, Any]] = []
@@ -86,7 +99,7 @@ def run_detection(image: Image.Image) -> list[tuple[list[float], float]]:
     Returns:
         List of (merged_box, confidence) tuples.
     """
-    results = detection_model.predict(image, conf=0.10)
+    results = get_model().predict(image, conf=0.10)
     raw_boxes = results[0].boxes.xyxy.tolist()
     raw_confs = results[0].boxes.conf.tolist()
     return merge_stacked_boxes(raw_boxes, raw_confs)
