@@ -4,11 +4,11 @@ Covers merge_stacked_boxes (pure logic) directly, and the API routes via
 FastAPI's TestClient with run_detection mocked out -- so these tests run in
 CI without needing real model weights or a GPU.
 """
+import io
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from PIL import Image
-import io
 
 from src.app import app, merge_stacked_boxes
 
