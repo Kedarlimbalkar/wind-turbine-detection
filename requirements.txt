@@ -1,7 +1,10 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+
 ultralytics==8.4.155
 transformers
 accelerate
-torchvision
 opencv-python-headless
 fastapi
 uvicorn

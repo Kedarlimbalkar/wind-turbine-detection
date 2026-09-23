@@ -24,3 +24,5 @@ azure_credentials*
 # OS/editor
 .DS_Store
 .vscode/
+
+*.egg-info/
