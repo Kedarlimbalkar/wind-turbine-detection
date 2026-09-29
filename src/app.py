@@ -8,18 +8,20 @@ import csv
 import io
 import os
 import zipfile
-from typing import Any
+from typing import Any, cast
 
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from PIL import Image, ImageDraw, ImageFont
 from ultralytics import YOLO
+from ultralytics.engine.results import Results
 
 MODEL_PATH = os.environ.get("MODEL_PATH", "model/best.pt")
 CONFIDENCE_THRESHOLD = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.35"))
 TURBINE_CLASS_ID = int(os.environ.get("TURBINE_CLASS_ID", "0"))
 IMG_SIZE = int(os.environ.get("IMG_SIZE", "640"))
-INFERENCE_CONF = float(os.environ.get("INFERENCE_CONF", "0.01"))
+INFERENCE_CONF = float(os.environ.get("INFERENCE_CONF", "0.25"))
+MERGE_STACKED = os.environ.get("MERGE_STACKED", "1") == "1"
 
 _detection_model: YOLO | None = None
 
@@ -35,6 +37,7 @@ def get_model() -> YOLO:
     if _detection_model is None:
         _detection_model = YOLO(MODEL_PATH)
     return _detection_model
+
 
 app = FastAPI(title="Wind Turbine Detection API")
 last_bulk_results: list[dict[str, Any]] = []
@@ -103,16 +106,21 @@ def run_detection(image: Image.Image) -> list[tuple[list[float], float]]:
         image: A PIL Image to run detection on.
 
     Returns:
-        List of (merged_box, confidence) tuples, turbine class only.
+        List of (box, confidence) tuples, turbine class only.
     """
-    results = get_model().predict(image, conf=INFERENCE_CONF, imgsz=IMG_SIZE)
+    results = cast(
+        list[Results],
+        get_model().predict(image, conf=INFERENCE_CONF, imgsz=IMG_SIZE),
+    )
     boxes_obj = results[0].boxes
-    if len(boxes_obj) == 0:
+    if boxes_obj is None or len(boxes_obj) == 0:
         return []
     mask = boxes_obj.cls == TURBINE_CLASS_ID
     raw_boxes = boxes_obj.xyxy[mask].tolist()
     raw_confs = boxes_obj.conf[mask].tolist()
-    return merge_stacked_boxes(raw_boxes, raw_confs)
+    if MERGE_STACKED:
+        return merge_stacked_boxes(raw_boxes, raw_confs)
+    return list(zip(raw_boxes, raw_confs))
 
 
 def draw_annotations(
@@ -123,7 +131,8 @@ def draw_annotations(
     """Draw bounding boxes and confidence labels on a copy of the image.
 
     Labels are staggered vertically when boxes are close together to avoid
-    overlapping text, and sizing scales with image resolution for legibility.
+    overlapping text, kept inside the image bounds, and sized to scale with
+    image resolution.
 
     Args:
         image: Source PIL Image.
@@ -138,9 +147,10 @@ def draw_annotations(
 
     box_color = (37, 99, 235)
     img_scale = max(annotated.width, annotated.height) / 500
-    line_width = max(5, int(6 * img_scale))
-    font_size = max(24, int(28 * img_scale))
+    line_width = max(2, int(3 * img_scale))
+    font_size = max(14, int(16 * img_scale))
 
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont
     try:
         font = ImageFont.truetype(
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size
@@ -158,8 +168,9 @@ def draw_annotations(
         text_bbox = draw.textbbox((0, 0), label, font=font)
         label_w = text_bbox[2] - text_bbox[0] + 14
         label_h = text_bbox[3] - text_bbox[1] + 12
-        label_x = box[0]
-        label_y = max(0, box[1] - label_h - 3)
+        # Keep the label horizontally inside the image so text is never cut off.
+        label_x = min(max(0.0, box[0]), max(0.0, annotated.width - label_w))
+        label_y = max(0.0, box[1] - label_h - 3)
 
         while any(
             not (
@@ -172,6 +183,9 @@ def draw_annotations(
         ):
             label_y += label_h + 3
 
+        # Keep the label vertically inside the image too.
+        label_y = min(label_y, max(0.0, annotated.height - label_h))
+
         draw.rectangle([label_x, label_y, label_x + label_w, label_y + label_h], fill=box_color)
         draw.text((label_x + 7, label_y + 6), label, fill=(255, 255, 255), font=font)
         placed_label_boxes.append((label_x, label_y, label_w, label_h))
@@ -183,6 +197,23 @@ def draw_annotations(
 def read_root() -> dict[str, str]:
     """Health check endpoint."""
     return {"status": "Wind Turbine Detection API is running"}
+
+
+@app.get("/model-info")
+def model_info() -> dict[str, Any]:
+    """Report which model file and classes are loaded, plus active settings.
+
+    Useful after a deploy to confirm the intended model version is serving.
+    """
+    names = get_model().names
+    return {
+        "model_path": MODEL_PATH,
+        "classes": {int(k): v for k, v in names.items()},
+        "turbine_class_id": TURBINE_CLASS_ID,
+        "img_size": IMG_SIZE,
+        "inference_conf": INFERENCE_CONF,
+        "merge_stacked": MERGE_STACKED,
+    }
 
 
 @app.post("/detect")
