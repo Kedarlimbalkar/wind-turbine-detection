@@ -1,6 +1,6 @@
 """FastAPI web application for wind turbine detection.
 
-Serves single-image and bulk ZIP upload endpoints, running a YOLOv8n model to
+Serves single-image and bulk ZIP upload endpoints, running a YOLOv8 model to
 detect wind turbines with confidence scores and configurable low-confidence flagging.
 """
 import base64
@@ -17,6 +17,9 @@ from ultralytics import YOLO
 
 MODEL_PATH = os.environ.get("MODEL_PATH", "model/best.pt")
 CONFIDENCE_THRESHOLD = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.35"))
+TURBINE_CLASS_ID = int(os.environ.get("TURBINE_CLASS_ID", "0"))
+IMG_SIZE = int(os.environ.get("IMG_SIZE", "640"))
+INFERENCE_CONF = float(os.environ.get("INFERENCE_CONF", "0.01"))
 
 _detection_model: YOLO | None = None
 
@@ -91,17 +94,24 @@ def merge_stacked_boxes(
 
 
 def run_detection(image: Image.Image) -> list[tuple[list[float], float]]:
-    """Run the detection model on an image and merge sub-part boxes.
+    """Run the detection model and return only wind_turbine boxes.
+
+    The v8 model also learned a 'pylon' class (id 1) so it can tell the two
+    apart -- pylon boxes are dropped here, never shown to the user.
 
     Args:
         image: A PIL Image to run detection on.
 
     Returns:
-        List of (merged_box, confidence) tuples.
+        List of (merged_box, confidence) tuples, turbine class only.
     """
-    results = get_model().predict(image, conf=0.10)
-    raw_boxes = results[0].boxes.xyxy.tolist()
-    raw_confs = results[0].boxes.conf.tolist()
+    results = get_model().predict(image, conf=INFERENCE_CONF, imgsz=IMG_SIZE)
+    boxes_obj = results[0].boxes
+    if len(boxes_obj) == 0:
+        return []
+    mask = boxes_obj.cls == TURBINE_CLASS_ID
+    raw_boxes = boxes_obj.xyxy[mask].tolist()
+    raw_confs = boxes_obj.conf[mask].tolist()
     return merge_stacked_boxes(raw_boxes, raw_confs)
 
 
