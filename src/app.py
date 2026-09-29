@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw, ImageFont
 from ultralytics import YOLO
 
 MODEL_PATH = os.environ.get("MODEL_PATH", "model/best.pt")
-CONFIDENCE_THRESHOLD = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.35"))
+CONFIDENCE_THRESHOLD = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.40"))
 
 _detection_model: YOLO | None = None
 
