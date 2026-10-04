@@ -10,7 +10,7 @@ from azure.storage.blob import BlobServiceClient
 
 CONNECTION_STRING = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
 CONTAINER_NAME = os.environ.get("AZURE_CONTAINER_NAME", "wind-turbine-data")
-MODEL_BLOB_PATH = os.environ.get("MODEL_BLOB_PATH", "models/turbine_v6/best.pt")
+MODEL_BLOB_PATH = os.environ.get("MODEL_BLOB_PATH", "models/turbine_v10/best.pt")
 LOCAL_MODEL_PATH = os.environ.get("MODEL_PATH", "model/best.pt")
 
 
