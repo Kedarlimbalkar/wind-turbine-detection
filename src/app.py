@@ -19,8 +19,8 @@ from ultralytics.engine.results import Results
 MODEL_PATH = os.environ.get("MODEL_PATH", "model/best.pt")
 CONFIDENCE_THRESHOLD = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.35"))
 TURBINE_CLASS_ID = int(os.environ.get("TURBINE_CLASS_ID", "0"))
-IMG_SIZE = int(os.environ.get("IMG_SIZE", "640"))
-INFERENCE_CONF = float(os.environ.get("INFERENCE_CONF", "0.25"))
+IMG_SIZE = int(os.environ.get("IMG_SIZE", "960"))
+INFERENCE_CONF = float(os.environ.get("INFERENCE_CONF", "0.10"))
 MERGE_STACKED = os.environ.get("MERGE_STACKED", "1") == "1"
 
 _detection_model: YOLO | None = None
